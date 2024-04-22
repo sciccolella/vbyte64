@@ -13,6 +13,8 @@ extern "C" {
 #include <stdlib.h>
 #endif // __cplusplus
 
+
+
 /*
  * Calculate the exact size required to compress array `v` of size `n`
  * using delta variable byte encoding.
@@ -20,21 +22,38 @@ extern "C" {
  * array. Depending on the flag `VBYTE64_NO_CLZ` it will call the function using
  * `CLZ` (COUNT LEADING ZEROES) or the one using comparison.
  */
-static size_t vb64d_compressed_size(const uint64_t *v, size_t n);
+size_t vb64d_compressed_size(const uint64_t *v, size_t n);
+
+/*
+ * Calculate the exact size required to compress array `v` of size `n`.
+ * Note this only calculate the size to encode the data, not the length of the
+ * array. Depending on the flag `VBYTE64_NO_CLZ` it will call the function using
+ * `CLZ` (COUNT LEADING ZEROES) or the one using comparison.
+ */
+size_t vb64_compressed_size(const uint64_t *v, size_t n);
 
 /*
  * Compress data in vector `v` of size `n` using variable byte encoding.
+ * If provided, `clen` will be set to total number of used bytes in the compression phase.
+ *
  * Returns a pointer of `uint8_t` containing the compressed data.
  * Return `NULL` if allocation of the uncompressed array fails.
  */
-uint8_t *vb64_compress_delta(uint64_t *v, size_t n);
+uint8_t *vb64_compress_delta(uint64_t *v, size_t n, size_t *clen);
 
 /*
  * Compress data in vector `v` of size `n` using variable byte encoding.
+ * If provided, `clen` will be set to total number of used bytes in the compression phase.
+ *
  * Returns a pointer of `uint8_t` containing the compressed data.
  * This version utilizes the first `sizeof(size_t)` bytes of the compressed
  * data to store the length of the array.
- * Return `NULL` if allocation of the uncompressed array fails.
+ * 
+ * Returns a pointer of `uint8_t` containing the compressed data.
+ * Returns `NULL` if allocation of the uncompressed array fails.
+ *
+ * Note: this function allocate more bytes than necessary in most cases
+ * (for padding purposes), this are left in the allocation.
  */
 uint8_t *vb64_compress_delta_wl(uint64_t *v, size_t n);
 

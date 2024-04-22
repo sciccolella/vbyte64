@@ -3,67 +3,91 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 static inline uint8_t vb64_benc_noclz(uint64_t v,
                                       uint8_t *__restrict__ *data_pp) {
   uint8_t code = 9;
-  if (v < (1UL << 8)) {
-    code = 0; // 1 byte
+  if (v == 0) {
+    code = 0;
+  } else if (v < (1UL << 8)) {
+    code = 1; // 1 byte
   } else if (v < (1UL << 16)) {
-    code = 1; // 2 bytes
+    code = 2; // 2 bytes
   } else if (v < (1UL << 24)) {
-    code = 2; // 3 bytes
+    code = 3; // 3 bytes
   } else if (v < (1UL << 32)) {
-    code = 3; // 4 bytes
+    code = 4; // 4 bytes
   } else if (v < (1UL << 40)) {
-    code = 4; // 5 bytes
+    code = 5; // 5 bytes
   } else if (v < (1UL << 48)) {
-    code = 5; // 6 bytes
+    code = 6; // 6 bytes
   } else if (v < (1UL << 56)) {
-    code = 6; // 7 bytes
+    code = 7; // 7 bytes
   } else {
-    code = 7; // 8 bytes
+    code = 8; // 8 bytes
   }
-  memcpy(*data_pp, &v, code + 1);
-  *data_pp += code + 1;
+  memcpy(*data_pp, &v, code);
+  *data_pp += code;
   return code;
 }
 
 static inline uint8_t vb64_benc(uint64_t v, uint8_t *__restrict__ *data_pp) {
-  uint8_t code = 7U - (__builtin_clzll(v | 1) >> 3);
-  memcpy(*data_pp, &v, code + 1);
-  *data_pp += code + 1;
+  uint8_t code = v ? 8U - (__builtin_clzll(v | 1) >> 3) : 0;
+  memcpy(*data_pp, &v, code);
+  *data_pp += code;
   return code;
 }
 
 size_t vb64d_encode_size(const uint64_t *v, size_t n) {
   size_t nbytes = 0, i;
-  uint64_t _vo = v[0], _v = _vo;
-  nbytes = 8U - (__builtin_clzll(_vo | 1) >> 3);
+  uint64_t vo_ = v[0], v_ = vo_;
+  nbytes = vo_ ? 8U - (__builtin_clzll(vo_ | 1) >> 3) : 0;
   for (i = 1; i < n; ++i) {
-    _v = v[i];
-    nbytes += 8U - (__builtin_clzll((_v - _vo) | 1) >> 3);
-    _vo = _v;
+    v_ = v[i];
+    nbytes += v_ - vo_ ? 8U - (__builtin_clzll((v_ - vo_) | 1) >> 3) : 0;
+    vo_ = v_;
+  }
+  return nbytes;
+}
+
+size_t vb64_encode_size(const uint64_t *v, size_t n) {
+  size_t nbytes = 0, i;
+  // uint64_t vo_ = v[0], v_ = vo_;
+  // nbytes = vo_ ? 8U - (__builtin_clzll(vo_ | 1) >> 3) : 0;
+  for (i = 0; i < n; ++i) {
+    nbytes += v[i] ? 8U - (__builtin_clzll(v[i] | 1) >> 3) : 0;
   }
   return nbytes;
 }
 
 size_t vb64d_encode_size_noclz(const uint64_t *v, size_t n) {
   size_t nbytes = 0, i;
-  uint64_t _vo = v[0], _v = _vo;
-  nbytes += 1 + (_v > 0x00000000000000FF) + (_v > 0x000000000000FFFF) +
-            (_v > 0x0000000000FFFFFF) + (_v > 0x00000000FFFFFFFF) +
-            (_v > 0x000000FFFFFFFFFF) + (_v > 0x0000FFFFFFFFFFFF) +
-            (_v > 0x00FFFFFFFFFFFFFF);
+  uint64_t vo_ = v[0], v_ = vo_;
+  nbytes += (v_ > 0) + (v_ > 0x00000000000000FF) + (v_ > 0x000000000000FFFF) +
+            (v_ > 0x0000000000FFFFFF) + (v_ > 0x00000000FFFFFFFF) +
+            (v_ > 0x000000FFFFFFFFFF) + (v_ > 0x0000FFFFFFFFFFFF) +
+            (v_ > 0x00FFFFFFFFFFFFFF);
   for (i = 1; i < n; ++i) {
-    _v = v[i];
+    v_ = v[i];
     nbytes +=
-        1 + ((_v - _vo) > 0x00000000000000FF) +
-        ((_v - _vo) > 0x000000000000FFFF) + ((_v - _vo) > 0x0000000000FFFFFF) +
-        ((_v - _vo) > 0x00000000FFFFFFFF) + ((_v - _vo) > 0x000000FFFFFFFFFF) +
-        ((_v - _vo) > 0x0000FFFFFFFFFFFF) + ((_v - _vo) > 0x00FFFFFFFFFFFFFF);
-    _vo = _v;
+        ((v_ - vo_) > 0) + ((v_ - vo_) > 0x00000000000000FF) +
+        ((v_ - vo_) > 0x000000000000FFFF) + ((v_ - vo_) > 0x0000000000FFFFFF) +
+        ((v_ - vo_) > 0x00000000FFFFFFFF) + ((v_ - vo_) > 0x000000FFFFFFFFFF) +
+        ((v_ - vo_) > 0x0000FFFFFFFFFFFF) + ((v_ - vo_) > 0x00FFFFFFFFFFFFFF);
+    vo_ = v_;
+  }
+  return nbytes;
+}
+
+size_t vb64_encode_size_noclz(const uint64_t *v, size_t n) {
+  size_t nbytes = 0, i;
+  uint64_t v_;
+  for (i = 0; i < n; ++i) {
+    v_ = v[i];
+    nbytes += (v_ > 0) + (v_ > 0x00000000000000FF) + (v_ > 0x000000000000FFFF) +
+              (v_ > 0x0000000000FFFFFF) + (v_ > 0x00000000FFFFFFFF) +
+              (v_ > 0x000000FFFFFFFFFF) + (v_ > 0x0000FFFFFFFFFFFF) +
+              (v_ > 0x00FFFFFFFFFFFFFF);
   }
   return nbytes;
 }
@@ -75,7 +99,7 @@ size_t vb64d_encode_size_noclz(const uint64_t *v, size_t n) {
  * array. Depending on the flag `VBYTE64_NO_CLZ` it will call the function using
  * `CLZ` (COUNT LEADING ZEROES) or the one using comparison.
  */
-static size_t vb64d_compressed_size(const uint64_t *v, size_t n) {
+size_t vb64d_compressed_size(const uint64_t *v, size_t n) {
   // 8 bits will encode the code for 2 values
   // because of values being uint64, we need 4 bits for key
   // therefore the number of keys is the LEN(values) / 2
@@ -98,7 +122,12 @@ static uint8_t *vb64_encode_delta(uint8_t *key_p, uint8_t *data_p,
   uint8_t shift_ = 0, ckey = 0, code = 0;
   uint64_t ov = v[0], cv;
   // first one must be encoded fully
+#ifdef VBYTE64_NO_CLZ
+  code = vb64_benc_noclz(v[0], &data_p);
+#else
   code = vb64_benc(v[0], &data_p);
+#endif /* ifdef VBYTE64_NO_CLZ */
+
   ckey |= code << shift_;
   shift_ += 4;
 
@@ -109,12 +138,17 @@ static uint8_t *vb64_encode_delta(uint8_t *key_p, uint8_t *data_p,
       ckey = 0;
     }
     cv = v[i];
+#ifdef VBYTE64_NO_CLZ
+    code = vb64_benc_noclz(cv - ov, &data_p);
+#else
     code = vb64_benc(cv - ov, &data_p);
+#endif /* ifdef VBYTE64_NO_CLZ */
     ckey |= code << shift_;
     shift_ += 4;
     ov = cv;
   }
   *key_p++ = ckey;
+  // pointer to first unused
   return data_p;
 }
 
@@ -134,7 +168,10 @@ uint8_t *vb64_compress_delta(uint64_t *v, size_t n) {
   uint8_t *key_p = cdata;
   uint8_t *data_p = key_p + key_size;
 
-  vb64_encode_delta(key_p, data_p, v, n);
+  uint8_t *data_p_end = vb64_encode_delta(key_p, data_p, v, n);
+
+  if (clen)
+    *clen = data_p_end - cdata;
   return cdata;
 }
 
@@ -160,16 +197,44 @@ uint8_t *vb64_compress_delta_wl(uint64_t *v, size_t n) {
 
   uint8_t *data_p = key_p + key_size;
 
-  vb64_encode_delta(key_p, data_p, v, n);
+  uint8_t *data_p_end = vb64_encode_delta(key_p, data_p, v, n);
+  if (clen)
+    *clen = data_p_end - cdata;
+  return cdata;
+}
+
+uint8_t *vb64_compress_wl(uint64_t *v, size_t n, size_t *clen) {
+  size_t key_size = sizeof(size_t) + sizeof(uint8_t) * ((n + 1) / 2);
+  size_t data_size = vb64_encode_size(v, n);
+  size_t compress_size = key_size + data_size + VBYTE64_PADDING;
+
+  uint8_t *cdata = (uint8_t *)malloc(compress_size);
+  if (!cdata)
+    return NULL;
+  uint8_t *key_p = cdata;
+  // copy size to the first bytes
+  memcpy(key_p, &n, sizeof(size_t));
+  key_p += sizeof(size_t);
+
+  uint8_t *data_p = key_p + key_size;
+
+  uint8_t *data_p_end = vb64_encode(key_p, data_p, v, n);
+  if (clen)
+    *clen = data_p_end - cdata;
   return cdata;
 }
 
 static inline uint64_t vb64_bdec(const uint8_t **data_pp, uint8_t code) {
+  // uint64_t val = 0;
+  // const uint8_t *data_p = *data_pp;
+  // memcpy(&val, data_p, code);
+  // data_p += code;
+  // *data_pp = data_p;
+  // return val;
+
   uint64_t val = 0;
-  const uint8_t *data_p = *data_pp;
-  memcpy(&val, data_p, code + 1);
-  data_p += code + 1;
-  *data_pp = data_p;
+  memcpy(&val, *data_pp, code);
+  *data_pp += code;
   return val;
 }
 
@@ -235,71 +300,15 @@ static uint64_t *vb64_decompress_delta_wl(uint8_t *in, size_t *n) {
   return out;
 }
 
-void sanity_encode_check() {
-  uint64_t data[] = {
-      0,
-      13,
-      16,
-      17,
-      20,
-      241UL,                 // 11110000 (1 byte)
-      65282UL,               // (2 byte)
-      16776963UL,            // 3
-      4294967044UL,          // 4
-      1099511562245UL,       // 5
-      281474959933446UL,     // 6
-      72057589743656967UL,   // 7
-      18446742974376182038UL // 8
-  };
-  size_t n = sizeof data / sizeof data[0];
-  printf("len = %zu\n", n);
+uint64_t *vb64_decompress_wl(uint8_t *in, size_t *n) {
+  memcpy(n, in, sizeof(size_t));
+  uint64_t *out = malloc(sizeof(out[0]) * *n);
+  if (!out)
+    return NULL;
+  size_t key_size = sizeof(size_t) + sizeof(uint8_t) * ((*n + 1) / 2);
+  uint8_t *key_p = in + sizeof(size_t);
+  uint8_t *data_p = key_p + key_size;
 
-  uint8_t *compressed = vb64_compress_delta_wl(data, n);
-  size_t clen = 0;
-  uint64_t *decompressed = vb64_decompress_delta_wl(compressed, &clen);
-
-  for (size_t i = 0; i < n; i++) {
-    printf("data[i] = %lu\n", data[i]);
-    printf("deco[i] = %lu\n", decompressed[i]);
-  }
-
-  free(compressed);
-  free(decompressed);
-}
-
-void benchmark_decode(size_t n) {
-  clock_t t0 = clock();
-
-  printf("n = %zu\n", n);
-  uint64_t *au64 = malloc(n * sizeof au64[0]);
-
-  for (size_t i = 0; i < n; i++) {
-    au64[i] |= rand();
-    au64[i] = (au64[i] << 32) | rand();
-  }
-  printf("Generated\n");
-
-  uint8_t *compressed = vb64_compress_delta_wl(au64, n);
-  printf("Compressed\n");
-  t0 = clock();
-  size_t clen = 0;
-  uint64_t *decompressed = vb64_decompress_delta_wl(compressed, &clen);
-  fprintf(stderr, "[decode] decoded: %5ld - dumped : %5ld\n",
-          (clock() - t0) / CLOCKS_PER_SEC, 0UL);
-  printf("[decoded] clen = %zu\n", clen);
-
-  for (size_t i = 0; i < n; i++) {
-    if (au64[i] != decompressed[i])
-      printf("ERROR\n");
-  }
-
-  free(au64);
-  free(compressed);
-  free(decompressed);
-}
-
-int main(int argc, char *argv[]) {
-  // benchmark_decode(5e5);
-  // sanity_encode_check();
-  return EXIT_SUCCESS;
+  vb64_decode(key_p, data_p, out, *n);
+  return out;
 }
