@@ -246,9 +246,9 @@ uint8_t *vb64_compress_delta_wl(uint64_t *v, size_t n, size_t *clen) {
   uint8_t *key_p = cdata;
   // copy size to the first bytes
   memcpy(key_p, &n, sizeof(size_t));
-  key_p += sizeof(size_t);
 
   uint8_t *data_p = key_p + key_size;
+  key_p += sizeof(size_t);
 
   uint8_t *data_p_end = vb64_encode_delta(key_p, data_p, v, n);
   if (clen)
@@ -267,10 +267,12 @@ uint8_t *vb64_compress_wl(uint64_t *v, size_t n, size_t *clen) {
   uint8_t *key_p = cdata;
   // copy size to the first bytes
   memcpy(key_p, &n, sizeof(size_t));
-  key_p += sizeof(size_t);
 
   uint8_t *data_p = key_p + key_size;
+  key_p += sizeof(size_t);
+
   uint8_t *data_p_end = vb64_encode(key_p, data_p, v, n);
+
   if (clen)
     *clen = data_p_end - cdata;
   return cdata;
@@ -359,7 +361,7 @@ uint64_t *vb64_decompress_delta_wl(uint8_t *in, size_t *n) {
   uint64_t *out = malloc(sizeof(out[0]) * *n);
   if (!out)
     return NULL;
-  size_t key_size = sizeof(size_t) + sizeof(uint8_t) * ((*n + 1) / 2);
+  size_t key_size = sizeof(uint8_t) * ((*n + 1) / 2);
   uint8_t *key_p = in + sizeof(size_t);
   uint8_t *data_p = key_p + key_size;
 
@@ -372,7 +374,7 @@ uint64_t *vb64_decompress_wl(uint8_t *in, size_t *n) {
   uint64_t *out = malloc(sizeof(out[0]) * *n);
   if (!out)
     return NULL;
-  size_t key_size = sizeof(size_t) + sizeof(uint8_t) * ((*n + 1) / 2);
+  size_t key_size =  sizeof(uint8_t) * ((*n + 1) / 2);
   uint8_t *key_p = in + sizeof(size_t);
   uint8_t *data_p = key_p + key_size;
 
