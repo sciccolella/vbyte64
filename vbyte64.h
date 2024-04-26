@@ -46,6 +46,13 @@ uint8_t *vb64_compress_delta(uint64_t *v, size_t n, size_t *clen);
  * If provided, `clen` will be set to total number of used bytes in the compression phase.
  *
  * Returns a pointer of `uint8_t` containing the compressed data.
+ * Return `NULL` if allocation of the uncompressed array fails.
+ */
+uint8_t *vb64_compress(uint64_t *v, size_t n, size_t *clen);
+
+/*
+ * Compress data in vector `v` of size `n` using variable byte encoding.
+ * If provided, `clen` will be set to total number of used bytes in the compression phase.
  * This version utilizes the first `sizeof(size_t)` bytes of the compressed
  * data to store the length of the array.
  * 
@@ -55,14 +62,35 @@ uint8_t *vb64_compress_delta(uint64_t *v, size_t n, size_t *clen);
  * Note: this function allocate more bytes than necessary in most cases
  * (for padding purposes), this are left in the allocation.
  */
-uint8_t *vb64_compress_delta_wl(uint64_t *v, size_t n);
+uint8_t *vb64_compress_delta_wl(uint64_t *v, size_t n, size_t *clen);
+
+/*
+ * Compress data in vector `v` of size `n` using variable byte encoding.
+ * If provided, `clen` will be set to total number of used bytes in the compression phase.
+ * This version utilizes the first `sizeof(size_t)` bytes of the compressed
+ * data to store the length of the array.
+ * 
+ * Returns a pointer of `uint8_t` containing the compressed data.
+ * Returns `NULL` if allocation of the uncompressed array fails.
+ *
+ * Note: this function allocate more bytes than necessary in most cases
+ * (for padding purposes), this are left in the allocation.
+ */
+uint8_t *vb64_compress_wl(uint64_t *v, size_t n, size_t *clen);
 
 /*
  * Decompress data in vector `in` of size `n` using variable byte decoding.
  * This version requires to know the length of the compressed array and the
  * `out` array should be already allocated.
  */
-static void vb64_decompress_delta(uint8_t *in, uint64_t *out, size_t n);
+void vb64_decompress_delta(uint8_t *in, uint64_t *out, size_t n);
+
+/*
+ * Decompress data in vector `in` of size `n` using variable byte decoding.
+ * This version requires to know the length of the compressed array and the
+ * `out` array should be already allocated.
+ */
+void vb64_decompress(uint8_t *in, uint64_t *out, size_t n);
 
 /*
  * Decompress data in vector `in` using variable byte decoding of unknown size.
@@ -72,7 +100,17 @@ static void vb64_decompress_delta(uint8_t *in, uint64_t *out, size_t n);
  * data to store the length of the array.
  * Return `NULL` if allocation of the uncompressed array fails.
  */
-static uint64_t *vb64_decompress_delta_wl(uint8_t *in, size_t *n);
+uint64_t *vb64_decompress_delta_wl(uint8_t *in, size_t *n);
+
+/*
+ * Decompress data in vector `in` using variable byte decoding of unknown size.
+ * Provide a valid pointer to a variable `n` to store the retrieved lenght of
+ * the array. Returns a pointer of `uint16_t` containing the uncompressed data.
+ * This version utilizes the first `sizeof(size_t)` bytes of the compressed
+ * data to store the length of the array.
+ * Return `NULL` if allocation of the uncompressed array fails.
+ */
+uint64_t *vb64_decompress_wl(uint8_t *in, size_t *n);
 
 #ifdef __cplusplus
 }
