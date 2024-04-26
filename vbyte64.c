@@ -379,3 +379,158 @@ uint64_t *vb64_decompress_wl(uint8_t *in, size_t *n) {
   vb64_decode(key_p, data_p, out, *n);
   return out;
 }
+
+// Compression using files directly
+static inline uint8_t vb64f_benc_noclz(uint64_t v, FILE *cf_data) {
+  uint8_t code = 9;
+  if (v == 0) {
+    return 0;
+  } else if (v < (1UL << 8)) {
+    code = 1; // 1 byte
+  } else if (v < (1UL << 16)) {
+    code = 2; // 2 bytes
+  } else if (v < (1UL << 24)) {
+    code = 3; // 3 bytes
+  } else if (v < (1UL << 32)) {
+    code = 4; // 4 bytes
+  } else if (v < (1UL << 40)) {
+    code = 5; // 5 bytes
+  } else if (v < (1UL << 48)) {
+    code = 6; // 6 bytes
+  } else if (v < (1UL << 56)) {
+    code = 7; // 7 bytes
+  } else {
+    code = 8; // 8 bytes
+  }
+  if (fwrite(&v, sizeof(uint8_t) * code, 1, cf_data) != 1)
+    exit(EXIT_FAILURE);
+  return code;
+}
+
+static inline uint8_t vb64f_benc(uint64_t v, FILE *cf_data) {
+  if (!v)
+    return 0;
+  uint8_t code = 8U - (__builtin_clzll(v | 1) >> 3);
+  if (fwrite(&v, sizeof(uint8_t) * code, 1, cf_data) != 1)
+    exit(EXIT_FAILURE);
+  return code;
+}
+
+void vb64f_encode_delta(FILE *cf_key, FILE *cf_data, const uint64_t *v,
+                        size_t n) {
+  uint8_t shift_ = 0, ckey = 0, code = 0;
+  uint64_t ov = v[0], cv;
+  // first one must be encoded fully
+#ifdef VBYTE64_NO_CLZ
+  code = vb64f_benc_noclz(v[0], cf_data);
+#else
+  code = vb64f_benc(v[0], cf_data);
+#endif /* ifdef VBYTE64_NO_CLZ */
+
+  ckey |= code << shift_;
+  shift_ += 4;
+
+  for (size_t i = 1; i < n; i++) {
+    if (shift_ == 8) {
+      shift_ = 0;
+      fwrite(&ckey, sizeof(uint8_t), 1, cf_key);
+      ckey = 0;
+    }
+    cv = v[i];
+#ifdef VBYTE64_NO_CLZ
+    code = vb64f_benc_noclz(cv - ov, cf_data);
+#else
+    code = vb64f_benc(cv - ov, cf_data);
+#endif /* ifdef VBYTE64_NO_CLZ */
+    ckey |= code << shift_;
+    shift_ += 4;
+    ov = cv;
+  }
+  fwrite(&ckey, sizeof(uint8_t), 1, cf_key);
+}
+
+size_t vb64f_compress_delta(uint64_t *v, size_t n, const char *fpath) {
+  size_t key_size = sizeof(size_t) + sizeof(uint8_t) * ((n + 1) / 2);
+  size_t data_size = vb64d_encode_size(v, n);
+
+  FILE *cf_key = fopen(fpath, "wb");
+  FILE *cf_data = fopen(fpath, "r+b");
+
+  if (!cf_key || !cf_data)
+    return 0;
+
+  // copy size to the first bytes
+  if (fwrite(&n, sizeof(size_t), 1, cf_key) != 1)
+    return 0;
+
+  fseek(cf_data, key_size, SEEK_SET);
+  vb64f_encode_delta(cf_key, cf_data, v, n);
+
+  fclose(cf_data);
+  fclose(cf_key);
+  return 0;
+}
+
+static inline uint64_t vb64f_bdec(FILE *cf_data, uint8_t code) {
+  if (code == 0)
+    return 0;
+
+  uint64_t val = 0;
+  if (fread(&val, sizeof(uint8_t), code, cf_data) != code)
+    exit(EXIT_FAILURE);
+  return val;
+}
+
+void vb64f_decode_delta(FILE *cf_keys, FILE *cf_data, uint64_t *o, size_t n) {
+
+  // first value if fully encoded
+  uint8_t key = 0;
+  if (fread(&key, sizeof(uint8_t), 1, cf_keys) != 1) {
+    exit(EXIT_FAILURE);
+  }
+  // printf("key = %08b\n", key);
+  uint64_t prev = vb64f_bdec(cf_data, key & 0xF), val = 0;
+  // printf("prev = %lu\n", prev);
+
+  *o++ = prev;
+  uint8_t shift_ = 4;
+
+  for (size_t i = 1; i < n; ++i) {
+    if (shift_ == 8) {
+      shift_ = 0;
+      if (fread(&key, sizeof(uint8_t), 1, cf_keys) != 1) {
+        exit(EXIT_FAILURE);
+      }
+      // printf("key = %08b\n", key);
+    }
+    val = vb64f_bdec(cf_data, (key >> shift_) & 0xF);
+    val += prev;
+    // printf("val = %lu\n", val);
+    *o++ = val;
+    prev = val;
+    shift_ += 4;
+  }
+}
+
+uint64_t *vb64f_decompress_delta(const char *fpath, size_t *n) {
+  FILE *cf_keys = fopen(fpath, "rb");
+  FILE *cf_data = fopen(fpath, "rb");
+  if (!cf_keys || !cf_data)
+    return NULL;
+
+  if (fread(n, sizeof(size_t), 1, cf_keys) != 1)
+    return NULL;
+
+  size_t key_size = sizeof(size_t) + sizeof(uint8_t) * ((*n + 1) / 2);
+  size_t data_offset = key_size;
+  fseek(cf_data, data_offset, SEEK_SET);
+  uint64_t *out = malloc(sizeof(out[0]) * *n);
+
+  if (!out)
+    return NULL;
+
+  vb64f_decode_delta(cf_keys, cf_data, out, *n);
+  fclose(cf_data);
+  fclose(cf_keys);
+  return out;
+}
